@@ -1,0 +1,42 @@
+{
+  "settings": {
+    "max_products_per_brand_per_run": 0,
+    "delay_seconds_between_pages": 2,
+    "headless": true,
+    "timeout_ms": 45000,
+    "data_dir": "data",
+    "reports_dir": "reports"
+  },
+  "brands": [
+    {
+      "name": "Zara",
+      "listing_urls": [
+        "https://www.zara.com/in/en/man-new-in-l711.html?v1=2732942",
+        "https://www.zara.com/in/en/man-all-products-l7465.html?v1=2443335"
+      ]
+    },
+    {
+      "name": "H&M",
+      "listing_urls": [
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=2",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=3",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=4",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=5",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=6",
+
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=8",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=9",
+        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=10"
+      ]
+    },
+    {
+      "name": "Snitch",
+      "listing_urls": ["https://www.snitch.com/shop"]
+    },
+    {
+      "name": "Urbanic",
+      "listing_urls": ["https://in.urbanic.com/"]
+    }
+  ]
+}
