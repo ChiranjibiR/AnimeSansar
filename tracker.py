@@ -224,7 +224,7 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         snitch_links = [
             item.get("href", "")
             for item in links
-            if re.search(r"/\d+/buy/?(?:[?#].*)?$", item.get("href", "").lower())
+            if re.search(r"^/[^/]+/[^/]+/\d+/buy/?(?:[?#].*)?$", urlparse(item.get("href", "")).path.lower() + ("?" + urlparse(item.get("href", "")).query if urlparse(item.get("href", "")).query else ""))
         ]
         print("Snitch sample product links:", snitch_links[:10])
         print("Snitch product links found in page anchors:", len(snitch_links))
@@ -241,7 +241,7 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
 
     def is_product_path(path: str) -> bool:
         # Snitch product URLs look like /category/product-slug/<numeric-id>/buy.
-        if "snitch.com" in host and re.search(r"/\d+/buy/?$", path):
+        if "snitch.com" in host and re.fullmatch(r"/[^/]+/[^/]+/\d+/buy/?", path):
             return True
         return any(pattern in path for pattern in patterns)
 
