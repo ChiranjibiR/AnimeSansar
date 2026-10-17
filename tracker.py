@@ -198,8 +198,7 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
     except Exception:
         links = []
 
-    # TEMPORARY DIAGNOSTIC: show whether BearHouse product links are present
-    # in the listing page's rendered anchor elements. Remove after debugging.
+    # TEMPORARY DIAGNOSTICS: show product links exposed in rendered anchors.
     if "thebearhouse.com" in host:
         bearhouse_links = [
             item.get("href", "")
@@ -208,6 +207,20 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         ]
         print("BearHouse sample links:", bearhouse_links[:10])
         print("BearHouse product links found in page anchors:", len(bearhouse_links))
+    if "snitch.com" in host:
+        snitch_links = [
+            item.get("href", "")
+            for item in links
+            if re.search(r"/\d+/buy/?(?:[?#].*)?$", item.get("href", "").lower())
+        ]
+        print("Snitch sample product links:", snitch_links[:10])
+        print("Snitch product links found in page anchors:", len(snitch_links))
+
+    def is_product_path(path: str) -> bool:
+        # Snitch product URLs look like /category/product-slug/<numeric-id>/buy.
+        if "snitch.com" in host and re.search(r"/\d+/buy/?$", path):
+            return True
+        return any(pattern in path for pattern in patterns)
 
     # Extract product URLs referenced by JSON-LD Product records, when present.
     try:
@@ -240,7 +253,7 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         if parsed.netloc.lower().removeprefix("www.") != host:
             continue
         path = parsed.path.lower()
-        if not any(p in path for p in patterns):
+        if not is_product_path(path):
             continue
         # BonkersCorner product URLs include /collections/<collection>/products/<slug>.
         # Do not mistake the collection listing itself for a product URL.
@@ -263,7 +276,7 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         if parsed.netloc.lower().removeprefix("www.") != host:
             continue
         path = parsed.path.lower()
-        if (any(p in path for p in patterns)
+        if (is_product_path(path)
                 and not ("/collections/" in path and "/products/" not in path)
                 and not any(
                     x in path for x in ("/search", "/help", "/cart", "/login", "/customer-service",
