@@ -239,6 +239,27 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         except Exception as exc:
             print("Snitch HTML diagnostic error:", str(exc))
 
+    if "thesouledstore.com" in host:
+        print("Souled Store page title:", await page.title())
+        print("Souled Store final URL:", page.url)
+        print("Souled Store total anchors:", len(links))
+
+        product_like_links = [
+            item.get("href", "")
+            for item in links
+            if "/product/" in item.get("href", "").lower()
+        ]
+        print("Souled Store /product/ links:", len(product_like_links))
+        print("Souled Store sample product links:", product_like_links[:20])
+
+        try:
+            html = await page.content()
+            print("Souled Store rendered HTML length:", len(html))
+            print("HTML contains /product/:", "/product/" in html.lower())
+            print("HTML contains product data:", "product" in html.lower())
+        except Exception as exc:
+            print("Souled Store HTML diagnostic error:", str(exc))
+
     def is_product_path(path: str) -> bool:
         """Return whether a URL path is a real product path for this storefront."""
         normalized_path = path.lower().rstrip("/") or "/"
