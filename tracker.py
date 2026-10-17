@@ -152,32 +152,108 @@ async def read_jsonld(page):
     return found
 
 
-async def discover_product_links(page, listing_url: str) -> list[str]:
+async def discover_product_links(page, listing_url: str, brand_cfg: dict | None = None,
+                                max_scrolls: int = 4) -> list[str]:
+    """
+    Discover product URLs from a public listing page.
+
+    Supports common Shopify-style /products/ URLs and several common product
+    URL patterns. It also scrolls a limited number of times to trigger lazy-loaded
+    product cards. This does not attempt to bypass HTTP 403s, CAPTCHAs, or other
+    access restrictions.
+    """
+    brand_cfg = brand_cfg or {}
+    host = urlparse(listing_url).netloc.lower().removeprefix("www.")
+    configured_patterns = brand_cfg.get("product_url_patterns", [])
+    patterns = tuple(p.lower() for p in (
+        configured_patterns or [
+            "/products/", "/product/", "/product-detail/", "/product-details/",
+            "/productpage", "/product-page/", "/p/", "/item/"
+        ]
+    ))
+
+    # Some storefronts load additional product cards while scrolling.
+    for _ in range(max(0, int(max_scrolls))):
+        try:
+            before = await page.locator("a[href]").count()
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(500)
+            after = await page.locator("a[href]").count()
+            if after <= before:
+                break
+        except Exception:
+            break
+
+    found = set()
     try:
         links = await page.locator("a[href]").evaluate_all(
-            "(els) => els.map(a => a.href).filter(Boolean)"
+            """(els) => els.map(a => ({
+                href: a.href,
+                text: (a.innerText || a.getAttribute('aria-label') || '').trim(),
+                cls: String(a.className || ''),
+                parentCls: String(a.parentElement?.className || ''),
+                grandparentCls: String(a.parentElement?.parentElement?.className || '')
+            })).filter(a => a.href)"""
         )
     except Exception:
-        return []
-    host = urlparse(listing_url).netloc.lower()
-    patterns = ("/p/", "/product", "/products/", "/productpage", "/item/")
-    output, seen = [], set()
-    for href in links:
+        links = []
+
+    # Extract product URLs referenced by JSON-LD Product records, when present.
+    try:
+        structured = await read_jsonld(page)
+        queue = list(structured)
+        while queue:
+            obj = queue.pop(0)
+            if isinstance(obj, list):
+                queue.extend(obj)
+            elif isinstance(obj, dict):
+                types = obj.get("@type", [])
+                if not isinstance(types, list):
+                    types = [types]
+                if any(str(t).lower() == "product" for t in types):
+                    product_url = obj.get("url")
+                    if isinstance(product_url, str) and product_url.strip():
+                        found.add(urljoin(listing_url, product_url.strip()))
+                for key in ("@graph", "itemListElement", "item", "mainEntity"):
+                    child = obj.get(key)
+                    if child:
+                        queue.extend(child if isinstance(child, list) else [child])
+    except Exception:
+        pass
+
+    for item in links:
+        href = item.get("href", "")
         if not href.startswith("http"):
             href = urljoin(listing_url, href)
         parsed = urlparse(href)
-        if parsed.netloc.lower() != host:
+        if parsed.netloc.lower().removeprefix("www.") != host:
             continue
         path = parsed.path.lower()
         if not any(p in path for p in patterns):
             continue
-        if any(x in path for x in ("/search", "/help", "/cart", "/login", "/customer-service")):
+        if any(x in path for x in (
+            "/search", "/help", "/cart", "/login", "/customer-service",
+            "/account", "/checkout", "/wishlist", "/collections/"
+        )):
             continue
+        # Avoid non-product navigation links even if their path happens to match.
         clean = canonical_url(href)
-        if clean not in seen:
-            seen.add(clean)
-            output.append(clean)
-    return output
+        if clean:
+            found.add(clean)
+
+    # Keep only URLs on the same host and with a recognized product path.
+    output = []
+    for href in found:
+        parsed = urlparse(href)
+        if parsed.netloc.lower().removeprefix("www.") != host:
+            continue
+        path = parsed.path.lower()
+        if any(p in path for p in patterns) and not any(
+            x in path for x in ("/search", "/help", "/cart", "/login", "/customer-service",
+                                "/account", "/checkout", "/wishlist", "/collections/")
+        ):
+            output.append(canonical_url(href))
+    return sorted(set(output))
 
 
 def infer_category(text: str, url: str) -> str:
@@ -290,11 +366,17 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
     limit = int(settings.get("max_products_per_brand_per_run", 0))
     delay = float(settings.get("delay_seconds_between_pages", 2))
     timeout = int(settings.get("timeout_ms", 45000))
+    max_scrolls = int(settings.get("max_scrolls_per_listing", 4))
     records = []
+    status_rows = []
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=bool(settings.get("headless", True)))
-        context = await browser.new_context(locale="en-IN", viewport={"width": 1440, "height": 1000})
+        context = await browser.new_context(
+            locale="en-IN",
+            viewport={"width": 1440, "height": 1000},
+            extra_http_headers={"Accept-Language": "en-IN,en;q=0.9"}
+        )
         page = await context.new_page()
         page.set_default_timeout(timeout)
 
@@ -304,19 +386,47 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                 continue
             print(f"\n=== {brand} ===")
             links_and_sources = []
+            brand_listing_statuses = []
+
             for listing_url in brand_cfg.get("listing_urls", []):
                 print(f"Listing: {listing_url}")
+                http_status = ""
+                candidate_count = 0
+                outcome = "unknown"
+                error_message = ""
                 try:
-                    response = await page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout)
-                    await page.wait_for_timeout(1500)
+                    response = await page.goto(
+                        listing_url, wait_until="domcontentloaded", timeout=timeout
+                    )
+                    await page.wait_for_timeout(1800)
+                    http_status = str(response.status) if response else "no_response"
                     if response and response.status >= 400:
+                        outcome = f"http_{response.status}"
+                        error_message = "Server returned an HTTP error; listing was not scraped."
                         print(f"  HTTP {response.status}; skipping listing")
-                        continue
-                    found = await discover_product_links(page, listing_url)
-                    print(f"  Candidate links: {len(found)}")
-                    links_and_sources.extend((url, listing_url) for url in found)
+                    else:
+                        found = await discover_product_links(
+                            page, listing_url, brand_cfg=brand_cfg, max_scrolls=max_scrolls
+                        )
+                        candidate_count = len(found)
+                        outcome = "products_found" if found else "no_candidate_links"
+                        print(f"  Candidate links: {candidate_count}")
+                        links_and_sources.extend((url, listing_url) for url in found)
                 except Exception as exc:
-                    print(f"  [listing error] {exc}")
+                    outcome = "listing_error"
+                    error_message = normalize(str(exc))[:500]
+                    print(f"  [listing error] {error_message}")
+                status = {
+                    "run_date": today_local(),
+                    "brand": brand,
+                    "listing_url": listing_url,
+                    "http_status": http_status,
+                    "candidate_links": candidate_count,
+                    "outcome": outcome,
+                    "error_message": error_message
+                }
+                status_rows.append(status)
+                brand_listing_statuses.append(status)
                 await asyncio.sleep(delay)
 
             unique = {}
@@ -327,15 +437,33 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                 candidates = candidates[:limit]
             print(f"  Inspecting {len(candidates)} unique product pages from all configured listing URLs"
                   + (f" (limit={limit})" if limit > 0 else " (no per-brand cap)"))
+
+            extracted_by_source = defaultdict(int)
             for index, (url, source) in enumerate(candidates, 1):
                 item = await scrape_product(page, brand, url, source)
                 if item:
                     records.append(item)
-                    print(f"  [{index}/{len(candidates)}] {item['product_name'][:70]} | {item['price']} {item['currency']}")
+                    extracted_by_source[source] += 1
+                    print(f"  [{index}/{len(candidates)}] {item['product_name'][:70]} | "
+                          f"{item['price']} {item['currency']}")
                 await asyncio.sleep(delay)
+
+            for status in brand_listing_statuses:
+                status["products_extracted_from_listing"] = extracted_by_source.get(
+                    status["listing_url"], 0
+                )
+                if status["outcome"] == "products_found" and not status["products_extracted_from_listing"]:
+                    status["outcome"] = "candidate_pages_failed_extraction"
 
         await context.close()
         await browser.close()
+
+    status_path = REPORTS_DIR / "scrape_status.csv"
+    write_csv(status_path, status_rows, [
+        "run_date", "brand", "listing_url", "http_status", "candidate_links",
+        "products_extracted_from_listing", "outcome", "error_message"
+    ])
+    print(f"Wrote scrape diagnostics: {status_path.relative_to(ROOT)}")
     return records
 
 
@@ -486,8 +614,10 @@ async def command_run(brand_filter: str | None):
     run_date = today_local()
     rows = await scrape_all(brand_filter)
     if not rows:
-        print("WARNING: no products were extracted. Check site URLs, access rules and page selectors.")
+        print("WARNING: no products were extracted. See reports/scrape_status.csv for per-URL diagnostics.")
         print("No empty/failed scrape will be treated as proof that a brand has no products.")
+        # Preserve prior product history; still refresh report files from existing observations.
+        rebuild_history_and_reports()
         return
     merge_observations(rows, run_date)
     rebuild_history_and_reports()

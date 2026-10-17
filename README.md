@@ -92,3 +92,18 @@ Replace the placeholder strings with real URLs copied from the official website 
 `max_products_per_brand_per_run` is set to `0` in the supplied config, meaning no per-brand product cap is applied to the links found on your configured pages. Set it to a positive number (for example `100`) if you want a limit for testing.
 
 **Scope note:** adding many category URLs does not automatically crawl every page of the entire domain. Each supplied listing page must expose its product links to the generic link detector. If a category uses pagination, “load more”, infinite scrolling, or site-specific APIs, the code may need a site-specific pagination/scrolling adapter. Validate each section in the Actions logs. Only scrape where the website's terms and crawling rules permit.
+
+
+## Current configured brands
+- BearHouse: `https://thebearhouse.com/collections/all`
+- BonkersCorner: `https://www.bonkerscorner.com/collections/mens-new-arrivals`
+- Snitch: `https://www.snitch.com/shop`
+
+The scraper supports common product URL patterns and performs a small number of page scrolls
+to trigger lazy-loaded product cards. It writes `reports/scrape_status.csv` on every run,
+including when a listing is blocked or no product links are found. Check this file first
+when a scheduled run produces no new observations.
+
+A public URL can still return HTTP 403 to automated requests. The tracker records this status
+and does not attempt to bypass access controls. It also does not guarantee complete catalogue
+coverage; verify the extracted product URLs and prices against the public pages.
