@@ -449,7 +449,24 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                 error_message = ""
                 snitch_responses = []
                 snitch_response_handler = None
+                snitch_request_handler = None
                 if "snitch.com" in urlparse(listing_url).netloc.lower():
+                    # Diagnostic: log requests sent to Snitch-owned domains so we can
+                    # identify where its dynamically loaded catalogue is requested.
+                    def snitch_request_handler(request):
+                        request_url = request.url
+                        try:
+                            request_host = urlparse(request_url).netloc.lower()
+                        except Exception:
+                            request_host = ""
+                        if "snitch.com" in request_host:
+                            print(
+                                "SNITCH REQUEST:", request.method,
+                                request.resource_type, request_url[:500]
+                            )
+
+                    page.on("request", snitch_request_handler)
+
                     def snitch_response_handler(response):
                         response_url = response.url
                         low_url = response_url.lower()
@@ -494,6 +511,11 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                     error_message = normalize(str(exc))[:500]
                     print(f"  [listing error] {error_message}")
                 finally:
+                    if snitch_request_handler is not None:
+                        try:
+                            page.remove_listener("request", snitch_request_handler)
+                        except Exception:
+                            pass
                     if snitch_response_handler is not None:
                         try:
                             page.remove_listener("response", snitch_response_handler)
