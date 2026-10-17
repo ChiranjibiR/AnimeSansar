@@ -195,6 +195,11 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
                 grandparentCls: String(a.parentElement?.parentElement?.className || '')
             })).filter(a => a.href)"""
         )
+    print("BearHouse sample links:", [
+        item.get("href", "")
+        for item in links
+        if "thebearhouse.com/products/" in item.get("href", "")
+    ][:10])
     except Exception:
         links = []
 
