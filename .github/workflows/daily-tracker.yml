@@ -1,3 +1,4 @@
+
 name: Daily Fashion Competitor Tracker
 
 on:
@@ -36,9 +37,9 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
-      # Filter H&M only for this run, preserving the committed config.json.
-      # Run the tracker once so the daily snapshot and status report cover all 4 daily brands.
-      - name: Exclude H&M from daily tracking
+      # Exclude H&M and validate the five daily brands.
+      # This modifies config.json only inside the workflow runner.
+      - name: Validate daily tracker brands
         run: |
           python - <<'PY'
           import json
@@ -46,16 +47,40 @@ jobs:
 
           path = Path("config.json")
           config = json.loads(path.read_text(encoding="utf-8"))
+
           config["brands"] = [
-              brand for brand in config.get("brands", [])
+              brand
+              for brand in config.get("brands", [])
               if brand.get("name", "").strip().lower() != "h&m"
           ]
-          expected = {"bearhouse", "bonkerscorner", "snitch", "the souled store"}
-          actual = {brand.get("name", "").strip().lower() for brand in config["brands"]}
+
+          expected = {
+              "bearhouse",
+              "bonkerscorner",
+              "snitch",
+              "the souled store",
+              "urban monkey",
+          }
+
+          actual = {
+              brand.get("name", "").strip().lower()
+              for brand in config["brands"]
+          }
+
           if actual != expected:
-              raise SystemExit(f"Unexpected daily brand set: {sorted(actual)}")
-          path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-          print("Daily brands:", ", ".join(brand["name"] for brand in config["brands"]))
+              raise SystemExit(
+                  "Unexpected daily brand set: "
+                  f"{sorted(actual)}"
+              )
+
+          path.write_text(
+              json.dumps(config, indent=2) + "\n",
+              encoding="utf-8",
+          )
+
+          print("Validated daily brands:")
+          for brand in config["brands"]:
+              print(f"- {brand['name']}")
           PY
 
       - name: Scrape and rebuild CSV history
@@ -69,9 +94,10 @@ jobs:
       - name: Commit CSV data and reports
         run: |
           git add data/ reports/
+
           if git diff --cached --quiet; then
             echo "No CSV changes to commit."
           else
             git commit -m "Update fashion tracker data $(date -u +'%Y-%m-%d')"
-            git push
+            git push origin HEAD:${{ github.ref_name }}
           fi
