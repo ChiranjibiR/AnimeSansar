@@ -250,6 +250,11 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         if "snitch.com" in host:
             return bool(re.fullmatch(r"/[^/]+/[^/]+/\d+/buy", normalized_path))
 
+        # H&M product pages use /en_in/productpage.<numeric-id>.html.
+        # Validate the full path so unrelated URLs containing this text are ignored.
+        if "hm.com" in host:
+            return bool(re.fullmatch(r"/en_in/productpage\.\d+\.html", normalized_path))
+
         return any(pattern in normalized_path for pattern in patterns)
 
     # Extract product URLs referenced by JSON-LD Product records, when present.
@@ -751,7 +756,7 @@ def command_report():
 def main():
     parser = argparse.ArgumentParser(description="CSV-only fashion competitor tracker")
     parser.add_argument("command", choices=["run", "report"])
-    parser.add_argument("--brand", help="Optional brand: Zara, H&M, Snitch, Urbanic")
+    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, H&M")
     args = parser.parse_args()
     if args.command == "run":
         asyncio.run(command_run(args.brand))
