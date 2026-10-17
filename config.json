@@ -36,6 +36,11 @@
       "name": "The Souled Store",
       "listing_urls": ["https://www.thesouledstore.com/men/shirts"],
       "product_url_patterns": ["/product/"]
+    },
+    {
+      "name": "Urban Monkey",
+      "listing_urls": ["https://www.urbanmonkey.com/collections/clothing"],
+      "product_url_patterns": ["/products/"]
     }
   ]
 }
