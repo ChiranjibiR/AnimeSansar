@@ -447,11 +447,35 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                 candidate_count = 0
                 outcome = "unknown"
                 error_message = ""
+                snitch_responses = []
+                snitch_response_handler = None
+                if "snitch.com" in urlparse(listing_url).netloc.lower():
+                    def snitch_response_handler(response):
+                        response_url = response.url
+                        low_url = response_url.lower()
+                        if any(term in low_url for term in (
+                            "api", "graphql", "product", "collection", "catalog", "search"
+                        )):
+                            try:
+                                content_type = response.headers.get("content-type", "")
+                            except Exception:
+                                content_type = ""
+                            entry = {
+                                "url": response_url,
+                                "status": response.status,
+                                "content_type": content_type,
+                            }
+                            snitch_responses.append(entry)
+                            print(
+                                "Snitch network response:", entry["status"],
+                                entry["content_type"], entry["url"][:300]
+                            )
+                    page.on("response", snitch_response_handler)
                 try:
                     response = await page.goto(
                         listing_url, wait_until="domcontentloaded", timeout=timeout
                     )
-                    await page.wait_for_timeout(1800)
+                    await page.wait_for_timeout(4500 if snitch_response_handler else 1800)
                     http_status = str(response.status) if response else "no_response"
                     if response and response.status >= 400:
                         outcome = f"http_{response.status}"
@@ -469,6 +493,15 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                     outcome = "listing_error"
                     error_message = normalize(str(exc))[:500]
                     print(f"  [listing error] {error_message}")
+                finally:
+                    if snitch_response_handler is not None:
+                        try:
+                            page.remove_listener("response", snitch_response_handler)
+                        except Exception:
+                            pass
+                        print("Snitch matching network responses captured:", len(snitch_responses))
+                        if not snitch_responses:
+                            print("Snitch diagnostic: no matching API/product/collection responses observed.")
                 status = {
                     "run_date": today_local(),
                     "brand": brand,
