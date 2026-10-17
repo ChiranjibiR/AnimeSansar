@@ -36,6 +36,28 @@ jobs:
           pip install -r requirements.txt
           playwright install --with-deps chromium
 
+      # Filter H&M only for this run, preserving the committed config.json.
+      # Run the tracker once so the daily snapshot and status report cover all 4 daily brands.
+      - name: Exclude H&M from daily tracking
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("config.json")
+          config = json.loads(path.read_text(encoding="utf-8"))
+          config["brands"] = [
+              brand for brand in config.get("brands", [])
+              if brand.get("name", "").strip().lower() != "h&m"
+          ]
+          expected = {"bearhouse", "bonkerscorner", "snitch", "the souled store"}
+          actual = {brand.get("name", "").strip().lower() for brand in config["brands"]}
+          if actual != expected:
+              raise SystemExit(f"Unexpected daily brand set: {sorted(actual)}")
+          path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+          print("Daily brands:", ", ".join(brand["name"] for brand in config["brands"]))
+          PY
+
       - name: Scrape and rebuild CSV history
         run: python tracker.py run
 

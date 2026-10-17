@@ -33,6 +33,11 @@
       ]
     },
     {
+      "name": "The Souled Store",
+      "listing_urls": ["https://www.thesouledstore.com/men/shirts"],
+      "product_url_patterns": ["/product/"]
+    },
+    {
       "name": "H&M",
       "listing_urls": [
         "https://www2.hm.com/en_in/men/new-arrivals/view-all.html",

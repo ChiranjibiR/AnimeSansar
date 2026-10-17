@@ -749,17 +749,88 @@ async def command_run(brand_filter: str | None):
     rebuild_history_and_reports()
 
 
+
+async def command_diagnose_hm():
+    """Inspect H&M's first public listing page without bypassing access controls."""
+    listing_url = "https://www2.hm.com/en_in/men/new-arrivals/view-all.html"
+    config = load_config()
+    settings = config.get("settings", {})
+    timeout = int(settings.get("timeout_ms", 45000))
+    max_scrolls = int(settings.get("max_scrolls_per_listing", 4))
+    print("=== H&M first-page diagnostic ===")
+    print(f"URL: {listing_url}")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=bool(settings.get("headless", True)))
+        context = await browser.new_context(
+            locale="en-IN",
+            viewport={"width": 1440, "height": 1000},
+            extra_http_headers={"Accept-Language": "en-IN,en;q=0.9"},
+        )
+        page = await context.new_page()
+        page.set_default_timeout(timeout)
+        try:
+            response = await page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout)
+            await page.wait_for_timeout(1800)
+            status = response.status if response else "no_response"
+            print(f"HTTP status: {status}")
+            print(f"Final URL: {page.url}")
+            try:
+                print(f"Page title: {await page.title()}")
+            except Exception as exc:
+                print(f"Could not read page title: {exc}")
+            try:
+                html = await page.content()
+                print(f"Rendered HTML length: {len(html)}")
+                print(f"Contains productpage pattern: {'productpage.' in html}")
+                print(f"JSON-LD script count: {await page.locator('script[type=\"application/ld+json\"]').count()}")
+            except Exception as exc:
+                print(f"Could not inspect rendered HTML: {exc}")
+            if response and response.status >= 400:
+                print("Listing content was not inspected further because the server returned an HTTP error.")
+                print("This diagnostic does not retry around or bypass access restrictions.")
+            else:
+                brand_cfg = next((b for b in config.get("brands", []) if b.get("name", "").lower() == "h&m"), {"name": "H&M", "product_url_patterns": ["/productpage."]})
+                links = await discover_product_links(page, listing_url, brand_cfg=brand_cfg, max_scrolls=max_scrolls)
+                print(f"Product URLs discovered in the rendered page: {len(links)}")
+                for url in links[:10]:
+                    print(f"  {url}")
+                structured = await read_jsonld(page)
+                product_records = []
+                queue = list(structured)
+                while queue:
+                    obj = queue.pop(0)
+                    if isinstance(obj, list):
+                        queue.extend(obj)
+                    elif isinstance(obj, dict):
+                        types = obj.get("@type", [])
+                        if not isinstance(types, list):
+                            types = [types]
+                        if any(str(t).lower() == "product" for t in types):
+                            product_records.append(obj)
+                        for key in ("@graph", "itemListElement", "item", "mainEntity"):
+                            child = obj.get(key)
+                            if child:
+                                queue.extend(child if isinstance(child, list) else [child])
+                print(f"JSON-LD Product records found: {len(product_records)}")
+        except Exception as exc:
+            print(f"Diagnostic failed: {normalize(str(exc))[:500]}")
+        finally:
+            await context.close()
+            await browser.close()
+
 def command_report():
     rebuild_history_and_reports()
 
 
 def main():
     parser = argparse.ArgumentParser(description="CSV-only fashion competitor tracker")
-    parser.add_argument("command", choices=["run", "report"])
-    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, H&M")
+    parser.add_argument("command", choices=["run", "report", "diagnose-hm"])
+    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, The Souled Store, H&M")
     args = parser.parse_args()
     if args.command == "run":
         asyncio.run(command_run(args.brand))
+    elif args.command == "diagnose-hm":
+        asyncio.run(command_diagnose_hm())
     else:
         command_report()
 
