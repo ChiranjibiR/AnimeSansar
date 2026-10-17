@@ -36,7 +36,9 @@
         "/products/",
         "/product/",
         "/p/",
-        "/item/"
+        "/item/",
+        "/men/",
+        "/men-new-arrivals/"
       ]
     }
   ]
