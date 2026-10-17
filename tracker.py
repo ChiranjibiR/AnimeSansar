@@ -240,10 +240,17 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
             print("Snitch HTML diagnostic error:", str(exc))
 
     def is_product_path(path: str) -> bool:
-        # Snitch product URLs look like /category/product-slug/<numeric-id>/buy.
-        if "snitch.com" in host and re.fullmatch(r"/[^/]+/[^/]+/\d+/buy/?", path):
-            return True
-        return any(pattern in path for pattern in patterns)
+        """Return whether a URL path is a real product path for this storefront."""
+        normalized_path = path.lower().rstrip("/") or "/"
+
+        # Snitch product URLs look like:
+        # /category/product-slug/<numeric-product-id>/buy
+        # Treat this as an exclusive rule: generic "/buy" matching also catches
+        # category/navigation pages such as "/men-shirts/buy".
+        if "snitch.com" in host:
+            return bool(re.fullmatch(r"/[^/]+/[^/]+/\d+/buy", normalized_path))
+
+        return any(pattern in normalized_path for pattern in patterns)
 
     # Extract product URLs referenced by JSON-LD Product records, when present.
     try:
@@ -260,7 +267,11 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
                 if any(str(t).lower() == "product" for t in types):
                     product_url = obj.get("url")
                     if isinstance(product_url, str) and product_url.strip():
-                        found.add(urljoin(listing_url, product_url.strip()))
+                        absolute_url = urljoin(listing_url, product_url.strip())
+                        parsed_product_url = urlparse(absolute_url)
+                        same_host = parsed_product_url.netloc.lower().removeprefix("www.") == host
+                        if same_host and is_product_path(parsed_product_url.path.lower()):
+                            found.add(canonical_url(absolute_url))
                 for key in ("@graph", "itemListElement", "item", "mainEntity"):
                     child = obj.get(key)
                     if child:
@@ -306,6 +317,8 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
                                         "/account", "/checkout", "/wishlist")
                 )):
             output.append(canonical_url(href))
+    if "snitch.com" in host:
+        print(f"Snitch validated product URLs after filtering: {len(set(output))}")
     return sorted(set(output))
 
 
