@@ -168,7 +168,7 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
     patterns = tuple(p.lower() for p in (
         configured_patterns or [
             "/products/", "/product/", "/product-detail/", "/product-details/",
-            "/productpage", "/product-page/", "/p/", "/item/"
+            "/product-page/", "/p/", "/item/"
         ]
     ))
 
@@ -270,11 +270,6 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         # category/navigation pages such as "/men-shirts/buy".
         if "snitch.com" in host:
             return bool(re.fullmatch(r"/[^/]+/[^/]+/\d+/buy", normalized_path))
-
-        # H&M product pages use /en_in/productpage.<numeric-id>.html.
-        # Validate the full path so unrelated URLs containing this text are ignored.
-        if "hm.com" in host:
-            return bool(re.fullmatch(r"/en_in/productpage\.\d+\.html", normalized_path))
 
         return any(pattern in normalized_path for pattern in patterns)
 
@@ -427,6 +422,42 @@ async def scrape_product(page, brand: str, url: str, listing_url: str):
                         break
                 except Exception:
                     pass
+
+        # The Souled Store fallback: its product pages may expose the visible
+        # selling price in rendered text rather than JSON-LD/meta price fields.
+        # Prefer a price immediately before the explicit tax-inclusive label;
+        # do not grab arbitrary numbers such as sizes or stock counts.
+        if not price and "thesouledstore.com" in urlparse(url).netloc.lower():
+            try:
+                visible_text = await page.locator("body").inner_text(timeout=5000)
+                price_label = re.search(
+                    r"(?i)(?:price\s+incl\.?\s+of\s+all\s+taxes|inclusive\s+of\s+all\s+taxes)",
+                    visible_text,
+                )
+                if price_label:
+                    before_label = visible_text[max(0, price_label.start() - 180):price_label.start()]
+                    rupee_values = re.findall(r"₹\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)", before_label)
+                    if rupee_values:
+                        # The final amount nearest the label is the displayed selling price.
+                        price, inferred = parse_price("₹" + rupee_values[-1])
+                        currency = currency or inferred or "INR"
+                if not price:
+                    # Fallback to visible price-labelled elements only. Ignore
+                    # elements without a rupee amount, and prefer the last amount
+                    # in a sale-price container (usually the discounted price).
+                    price_texts = await page.locator(
+                        '[class*="price" i], [id*="price" i], [data-testid*="price" i]'
+                    ).all_inner_texts()
+                    for text_value in price_texts:
+                        amounts = re.findall(r"₹\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)", text_value)
+                        if amounts:
+                            price, inferred = parse_price("₹" + amounts[-1])
+                            currency = currency or inferred or "INR"
+                            if price:
+                                break
+                print(f"  [Souled Store price diagnostic] {price or 'PRICE_NOT_FOUND'} INR | {url}")
+            except Exception as exc:
+                print(f"  [Souled Store price fallback error] {normalize(str(exc))[:250]}")
 
         if not name and not pid:
             return None
@@ -771,73 +802,6 @@ async def command_run(brand_filter: str | None):
 
 
 
-async def command_diagnose_hm():
-    """Inspect H&M's first public listing page without bypassing access controls."""
-    listing_url = "https://www2.hm.com/en_in/men/new-arrivals/view-all.html"
-    config = load_config()
-    settings = config.get("settings", {})
-    timeout = int(settings.get("timeout_ms", 45000))
-    max_scrolls = int(settings.get("max_scrolls_per_listing", 4))
-    print("=== H&M first-page diagnostic ===")
-    print(f"URL: {listing_url}")
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=bool(settings.get("headless", True)))
-        context = await browser.new_context(
-            locale="en-IN",
-            viewport={"width": 1440, "height": 1000},
-            extra_http_headers={"Accept-Language": "en-IN,en;q=0.9"},
-        )
-        page = await context.new_page()
-        page.set_default_timeout(timeout)
-        try:
-            response = await page.goto(listing_url, wait_until="domcontentloaded", timeout=timeout)
-            await page.wait_for_timeout(1800)
-            status = response.status if response else "no_response"
-            print(f"HTTP status: {status}")
-            print(f"Final URL: {page.url}")
-            try:
-                print(f"Page title: {await page.title()}")
-            except Exception as exc:
-                print(f"Could not read page title: {exc}")
-            try:
-                html = await page.content()
-                print(f"Rendered HTML length: {len(html)}")
-                print(f"Contains productpage pattern: {'productpage.' in html}")
-                print(f"JSON-LD script count: {await page.locator('script[type=\"application/ld+json\"]').count()}")
-            except Exception as exc:
-                print(f"Could not inspect rendered HTML: {exc}")
-            if response and response.status >= 400:
-                print("Listing content was not inspected further because the server returned an HTTP error.")
-                print("This diagnostic does not retry around or bypass access restrictions.")
-            else:
-                brand_cfg = next((b for b in config.get("brands", []) if b.get("name", "").lower() == "h&m"), {"name": "H&M", "product_url_patterns": ["/productpage."]})
-                links = await discover_product_links(page, listing_url, brand_cfg=brand_cfg, max_scrolls=max_scrolls)
-                print(f"Product URLs discovered in the rendered page: {len(links)}")
-                for url in links[:10]:
-                    print(f"  {url}")
-                structured = await read_jsonld(page)
-                product_records = []
-                queue = list(structured)
-                while queue:
-                    obj = queue.pop(0)
-                    if isinstance(obj, list):
-                        queue.extend(obj)
-                    elif isinstance(obj, dict):
-                        types = obj.get("@type", [])
-                        if not isinstance(types, list):
-                            types = [types]
-                        if any(str(t).lower() == "product" for t in types):
-                            product_records.append(obj)
-                        for key in ("@graph", "itemListElement", "item", "mainEntity"):
-                            child = obj.get(key)
-                            if child:
-                                queue.extend(child if isinstance(child, list) else [child])
-                print(f"JSON-LD Product records found: {len(product_records)}")
-        except Exception as exc:
-            print(f"Diagnostic failed: {normalize(str(exc))[:500]}")
-        finally:
-            await context.close()
-            await browser.close()
 
 def command_report():
     rebuild_history_and_reports()
@@ -845,13 +809,11 @@ def command_report():
 
 def main():
     parser = argparse.ArgumentParser(description="CSV-only fashion competitor tracker")
-    parser.add_argument("command", choices=["run", "report", "diagnose-hm"])
-    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, The Souled Store, H&M")
+    parser.add_argument("command", choices=["run", "report"])
+    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, The Souled Store")
     args = parser.parse_args()
     if args.command == "run":
         asyncio.run(command_run(args.brand))
-    elif args.command == "diagnose-hm":
-        asyncio.run(command_diagnose_hm())
     else:
         command_report()
 

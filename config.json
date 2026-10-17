@@ -36,22 +36,6 @@
       "name": "The Souled Store",
       "listing_urls": ["https://www.thesouledstore.com/men/shirts"],
       "product_url_patterns": ["/product/"]
-    },
-    {
-      "name": "H&M",
-      "listing_urls": [
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=2",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=3",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=4",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=5",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=6",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=7",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=8",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=9",
-        "https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=10"
-      ],
-      "product_url_patterns": ["/productpage."]
     }
   ]
 }
