@@ -11,27 +11,19 @@
   "brands": [
     {
       "name": "BearHouse",
-      "listing_urls": [
-        "https://thebearhouse.com/collections/all"
-      ],
-      "product_url_patterns": [
-        "/products/"
-      ]
+      "listing_urls": ["https://thebearhouse.com/collections/all"],
+      "product_url_patterns": ["/products/"]
     },
     {
       "name": "BonkersCorner",
       "listing_urls": [
         "https://www.bonkerscorner.com/collections/mens-new-arrivals"
       ],
-      "product_url_patterns": [
-        "/products/"
-      ]
+      "product_url_patterns": ["/products/", "/collections/"]
     },
     {
       "name": "Snitch",
-      "listing_urls": [
-        "https://www.snitch.com/men-new-arrivals"
-      ],
+      "listing_urls": ["https://www.snitch.com/men-new-arrivals"],
       "product_url_patterns": [
         "/products/",
         "/product/",
