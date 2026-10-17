@@ -229,6 +229,16 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         print("Snitch sample product links:", snitch_links[:10])
         print("Snitch product links found in page anchors:", len(snitch_links))
 
+        # Temporary diagnostics: check whether product URLs exist in rendered HTML.
+        try:
+            html = await page.content()
+            print("Snitch HTML length:", len(html))
+            print("Contains /men-shirts/:", "/men-shirts/" in html)
+            print("Contains /men-t-shirts/:", "/men-t-shirts/" in html)
+            print("Contains /buy:", "/buy" in html)
+        except Exception as exc:
+            print("Snitch HTML diagnostic error:", str(exc))
+
     def is_product_path(path: str) -> bool:
         # Snitch product URLs look like /category/product-slug/<numeric-id>/buy.
         if "snitch.com" in host and re.search(r"/\d+/buy/?$", path):
