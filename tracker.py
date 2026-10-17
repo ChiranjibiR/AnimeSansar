@@ -208,6 +208,19 @@ async def discover_product_links(page, listing_url: str, brand_cfg: dict | None 
         print("BearHouse sample links:", bearhouse_links[:10])
         print("BearHouse product links found in page anchors:", len(bearhouse_links))
     if "snitch.com" in host:
+        # Temporary diagnostics to determine whether product links are rendered at all.
+        print("Snitch page title:", await page.title())
+        print("Snitch page URL:", page.url)
+        print("Snitch total anchors:", await page.locator("a[href]").count())
+        try:
+            snitch_product_like_urls = await page.locator(
+                'a[href*="/buy"], a[href*="/men-shirts/"], a[href*="/men-t-shirts/"]'
+            ).evaluate_all("(els) => els.map(a => a.href).slice(0, 20)")
+        except Exception as exc:
+            snitch_product_like_urls = []
+            print("Snitch product-like URL diagnostic error:", str(exc))
+        print("Snitch product-like URLs:", snitch_product_like_urls)
+
         snitch_links = [
             item.get("href", "")
             for item in links
