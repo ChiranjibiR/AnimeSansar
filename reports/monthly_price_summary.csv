@@ -1,0 +1,6 @@
+month,brand,category,observations_with_price,min_observed_price,median_observed_price,max_observed_price,note
+2026-10,BearHouse,T-shirt,32,1819.0,2599.0,3499.0,"Observed web prices, not verified transaction prices or profit margins."
+2026-10,BonkersCorner,T-shirt,30,899.0,1599.0,1999.0,"Observed web prices, not verified transaction prices or profit margins."
+2026-10,Snitch,Jacket/Outerwear,3,2624.0,2624.0,3999.0,"Observed web prices, not verified transaction prices or profit margins."
+2026-10,Snitch,Shirt,2,1599.0,1599.0,1599.0,"Observed web prices, not verified transaction prices or profit margins."
+2026-10,Snitch,T-shirt,20,1299.0,1999.0,3999.0,"Observed web prices, not verified transaction prices or profit margins."

@@ -1,0 +1,14 @@
+run_date,brand,listing_url,http_status,candidate_links,products_extracted_from_listing,outcome,error_message
+2026-10-17,BearHouse,https://thebearhouse.com/collections/all,200,32,32,products_found,
+2026-10-17,BonkersCorner,https://www.bonkerscorner.com/collections/mens-new-arrivals,200,30,30,products_found,
+2026-10-17,Snitch,https://www.snitch.com/men-new-arrivals,200,25,25,products_found,
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=2,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=3,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=4,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=5,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=6,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=7,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=8,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=9,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
+2026-10-17,H&M,https://www2.hm.com/en_in/men/new-arrivals/view-all.html?page=10,403,0,0,http_403,Server returned an HTTP error; listing was not scraped.
