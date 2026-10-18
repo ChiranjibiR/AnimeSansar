@@ -1,7 +1,7 @@
 month,brand,category,observations_with_price,min_observed_price,median_observed_price,max_observed_price,note
 2026-10,BearHouse,T-shirt,64,1819.0,2599.0,3499.0,"Observed web prices, not verified transaction prices or profit margins."
-2026-10,BonkersCorner,T-shirt,60,899.0,1599.0,1999.0,"Observed web prices, not verified transaction prices or profit margins."
-2026-10,Snitch,T-shirt,25,1299.0,1999.0,3999.0,"Observed web prices, not verified transaction prices or profit margins."
+2026-10,BonkersCorner,T-shirt,61,899.0,1599.0,1999.0,"Observed web prices, not verified transaction prices or profit margins."
+2026-10,Snitch,T-shirt,50,1299.0,1999.0,3999.0,"Observed web prices, not verified transaction prices or profit margins."
 2026-10,The Souled Store,Footwear,3,2199.0,2199.0,2299.0,"Observed web prices, not verified transaction prices or profit margins."
 2026-10,The Souled Store,Shirt,77,1399.0,1599.0,2199.0,"Observed web prices, not verified transaction prices or profit margins."
 2026-10,The Souled Store,T-shirt,7,1599.0,1799.0,1999.0,"Observed web prices, not verified transaction prices or profit margins."
