@@ -10,6 +10,10 @@ Persistent storage is kept in the Git repository:
   reports/monthly_price_summary.csv  observed price ranges by brand/category/month
   reports/monthly_fit_summary.csv    observed fit labels by brand/month
   reports/monthly_size_availability.csv size labels observed on product pages (NOT sales)
+  reports/weekly_launch_summary.csv weekly first-observed product counts
+  reports/weekly_price_summary.csv observed price ranges by brand/category/week
+  reports/weekly_fit_summary.csv observed fit labels by brand/week
+  reports/weekly_size_availability.csv size labels observed on product pages by week
 
 No database is used. Each run reads the existing CSVs, merges today's observations,
 rebuilds the derived CSV reports, and GitHub Actions commits the changes.
@@ -853,8 +857,98 @@ def rebuild_history_and_reports():
     write_csv(REPORTS_DIR / "monthly_size_availability.csv", size_rows,
               ["month", "brand", "size_labels_observed", "note"])
 
+    # Weekly summaries use ISO weeks (Monday-Sunday). They are rebuilt from the
+    # cumulative observation/history CSVs on every run, so no weekly history is lost.
+    def iso_week(value: str) -> str:
+        try:
+            d = date.fromisoformat(value[:10])
+            iso = d.isocalendar()
+            return f"{iso.year}-W{iso.week:02d}"
+        except (TypeError, ValueError):
+            return ""
+
+    weekly_launch_groups = defaultdict(list)
+    for row in history:
+        week = iso_week(row.get("first_seen_date", ""))
+        if week:
+            weekly_launch_groups[(week, row.get("brand", ""))].append(row)
+
+    weekly_launch_summary = []
+    for (week, brand), rows in sorted(weekly_launch_groups.items()):
+        prices = []
+        for row in rows:
+            try:
+                if row.get("first_seen_price"):
+                    prices.append(float(row["first_seen_price"]))
+            except (TypeError, ValueError):
+                pass
+        prices.sort()
+        weekly_launch_summary.append({
+            "iso_week": week,
+            "brand": brand,
+            "newly_observed_unique_products": len(rows),
+            "categories_seen": "|".join(sorted({r.get("category", "") for r in rows if r.get("category")})),
+            "median_first_observed_price": prices[len(prices)//2] if prices else "",
+            "note": "First observed by tracker during this ISO week; not a verified brand launch date."
+        })
+    write_csv(REPORTS_DIR / "weekly_launch_summary.csv", weekly_launch_summary, [
+        "iso_week", "brand", "newly_observed_unique_products", "categories_seen",
+        "median_first_observed_price", "note"
+    ])
+
+    weekly_price_groups = defaultdict(list)
+    weekly_fit_groups = defaultdict(set)
+    weekly_size_groups = defaultdict(set)
+    for row in observations:
+        week = iso_week(row.get("observed_date", ""))
+        if not week:
+            continue
+        brand = row.get("brand", "")
+        category = row.get("category", "") or "Unclassified"
+        try:
+            if row.get("price") not in ("", None):
+                weekly_price_groups[(week, brand, category)].append(float(row["price"]))
+        except (TypeError, ValueError):
+            pass
+        for fit in filter(None, (row.get("fit_labels", "")).split("|")):
+            weekly_fit_groups[(week, brand)].add(fit)
+        for size in filter(None, (row.get("sizes_observed", "")).split("|")):
+            weekly_size_groups[(week, brand)].add(size)
+
+    weekly_price_summary = []
+    for (week, brand, category), prices in sorted(weekly_price_groups.items()):
+        prices.sort()
+        weekly_price_summary.append({
+            "iso_week": week, "brand": brand, "category": category,
+            "observations_with_price": len(prices),
+            "min_observed_price": min(prices),
+            "median_observed_price": prices[len(prices)//2],
+            "max_observed_price": max(prices),
+            "note": "Observed web prices, not verified transaction prices or profit margins."
+        })
+    write_csv(REPORTS_DIR / "weekly_price_summary.csv", weekly_price_summary, [
+        "iso_week", "brand", "category", "observations_with_price",
+        "min_observed_price", "median_observed_price", "max_observed_price", "note"
+    ])
+
+    weekly_fit_rows = [
+        {"iso_week": week, "brand": brand, "fit_labels_observed": "|".join(sorted(labels)),
+         "note": "Heuristic text detection; validate on product pages."}
+        for (week, brand), labels in sorted(weekly_fit_groups.items())
+    ]
+    write_csv(REPORTS_DIR / "weekly_fit_summary.csv", weekly_fit_rows,
+              ["iso_week", "brand", "fit_labels_observed", "note"])
+
+    weekly_size_rows = [
+        {"iso_week": week, "brand": brand, "size_labels_observed": "|".join(sorted(labels)),
+         "note": "Observed size labels, NOT units sold or best-selling sizes."}
+        for (week, brand), labels in sorted(weekly_size_groups.items())
+    ]
+    write_csv(REPORTS_DIR / "weekly_size_availability.csv", weekly_size_rows,
+              ["iso_week", "brand", "size_labels_observed", "note"])
+
     print(f"Rebuilt product history for {len(history)} unique products.")
-    print("Reports rebuilt under reports/.")
+    print("Monthly and weekly reports rebuilt under reports/.")
 
 
 async def command_run(brand_filter: str | None):
@@ -882,7 +976,7 @@ def command_report():
 def main():
     parser = argparse.ArgumentParser(description="CSV-only fashion competitor tracker")
     parser.add_argument("command", choices=["run", "report"])
-    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, The Souled Store")
+    parser.add_argument("--brand", help="Optional brand: BearHouse, BonkersCorner, Snitch, The Souled Store, Urban Monkey")
     args = parser.parse_args()
     if args.command == "run":
         asyncio.run(command_run(args.brand))
