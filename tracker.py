@@ -97,6 +97,46 @@ def canonical_url(url: str) -> str:
     return parsed._replace(query="", fragment="").geturl().rstrip("/")
 
 
+def extract_snitch_product_urls(payload, listing_url: str) -> set[str]:
+    """Extract explicit Snitch product URLs from a JSON API payload.
+
+    This deliberately uses only URLs/paths actually present in the response; it
+    does not guess product slugs or bypass access controls.
+    """
+    host = urlparse(listing_url).netloc.lower().removeprefix("www.")
+    found: set[str] = set()
+    url_keys = {"url", "href", "link", "producturl", "canonicalurl", "product_url", "product_url_path"}
+    stack = [payload]
+    while stack:
+        value = stack.pop()
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if isinstance(child, (dict, list)):
+                    stack.append(child)
+                elif isinstance(child, str):
+                    key_normalized = str(key).replace("-", "").replace("_", "").lower()
+                    # URLs may be stored under a known URL field or as a URL/path value.
+                    looks_like_url = key_normalized in url_keys or child.startswith(("http://", "https://", "/"))
+                    if not looks_like_url:
+                        continue
+                    candidate = urljoin(listing_url, child.strip())
+                    parsed = urlparse(candidate)
+                    path = parsed.path.lower().rstrip("/") or "/"
+                    if (parsed.netloc.lower().removeprefix("www.") == host
+                            and re.fullmatch(r"/[^/]+/[^/]+/\d+/buy", path)):
+                        found.add(canonical_url(candidate))
+        elif isinstance(value, list):
+            stack.extend(value)
+        elif isinstance(value, str):
+            # Some APIs place URL paths inside a serialized text field.
+            for match in re.findall(r"(?:https?://[^\s\"'<>]+)?/[^/\s\"'<>]+/[^/\s\"'<>]+/\d+/buy(?:\?[^\s\"'<>]*)?", value):
+                candidate = urljoin(listing_url, match)
+                parsed = urlparse(candidate)
+                if parsed.netloc.lower().removeprefix("www.") == host:
+                    found.add(canonical_url(candidate))
+    return found
+
+
 def make_key(brand: str, url: str) -> str:
     return f"{brand.strip().lower()}|{canonical_url(url)}"
 
@@ -518,6 +558,7 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                 outcome = "unknown"
                 error_message = ""
                 snitch_responses = []
+                snitch_api_response_objects = []
                 snitch_response_handler = None
                 snitch_request_handler = None
                 if "snitch.com" in urlparse(listing_url).netloc.lower():
@@ -553,6 +594,8 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                                 "content_type": content_type,
                             }
                             snitch_responses.append(entry)
+                            if "json" in content_type.lower() or "api" in low_url:
+                                snitch_api_response_objects.append(response)
                             print(
                                 "Snitch network response:", entry["status"],
                                 entry["content_type"], entry["url"][:300]
@@ -562,7 +605,21 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                     response = await page.goto(
                         listing_url, wait_until="domcontentloaded", timeout=timeout
                     )
-                    await page.wait_for_timeout(4500 if snitch_response_handler else 1800)
+                    if snitch_response_handler:
+                        # Wait for actual Snitch product links instead of relying only on
+                        # a short fixed delay; scheduled/headless runs can hydrate later.
+                        try:
+                            await page.wait_for_function(
+                                r"""() => Array.from(document.querySelectorAll('a[href]'))
+                                    .some(a => /\/[^/]+\/[^/]+\/\d+\/buy\/?(?:[?#].*)?$/
+                                        .test(new URL(a.href).pathname))""",
+                                timeout=15000,
+                            )
+                        except PlaywrightTimeoutError:
+                            print("Snitch product links did not appear within 15 seconds; checking API responses and page anyway.")
+                        await page.wait_for_timeout(1000)
+                    else:
+                        await page.wait_for_timeout(1800)
                     http_status = str(response.status) if response else "no_response"
                     if response and response.status >= 400:
                         outcome = f"http_{response.status}"
@@ -572,6 +629,21 @@ async def scrape_all(brand_filter: str | None = None) -> list[dict]:
                         found = await discover_product_links(
                             page, listing_url, brand_cfg=brand_cfg, max_scrolls=max_scrolls
                         )
+                        if snitch_response_handler and snitch_api_response_objects:
+                            api_found = set()
+                            for api_response in snitch_api_response_objects:
+                                try:
+                                    if api_response.status < 200 or api_response.status >= 300:
+                                        continue
+                                    payload = await api_response.json()
+                                    api_found.update(extract_snitch_product_urls(payload, listing_url))
+                                except Exception as api_exc:
+                                    print("Snitch API payload parse skipped:", normalize(str(api_exc))[:180])
+                            if api_found:
+                                print(f"Snitch product URLs extracted from API JSON: {len(api_found)}")
+                                found = sorted(set(found) | api_found)
+                            else:
+                                print("Snitch API JSON contained no explicit product URLs matching the expected product URL pattern.")
                         candidate_count = len(found)
                         outcome = "products_found" if found else "no_candidate_links"
                         print(f"  Candidate links: {candidate_count}")
