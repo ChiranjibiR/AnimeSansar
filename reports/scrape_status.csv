@@ -1,6 +1,6 @@
 run_date,brand,listing_url,http_status,candidate_links,products_extracted_from_listing,outcome,error_message
-2026-10-19,BearHouse,https://thebearhouse.com/collections/all,200,32,32,products_found,
-2026-10-19,BonkersCorner,https://www.bonkerscorner.com/collections/mens-new-arrivals,200,30,30,products_found,
-2026-10-19,Snitch,https://www.snitch.com/men-new-arrivals,200,25,25,products_found,
-2026-10-19,The Souled Store,https://www.thesouledstore.com/men/shirts,200,24,22,products_found,
-2026-10-19,Urban Monkey,https://www.urbanmonkey.com/collections/clothing,200,89,89,products_found,
+2026-10-20,BearHouse,https://thebearhouse.com/collections/all,200,32,32,products_found,
+2026-10-20,BonkersCorner,https://www.bonkerscorner.com/collections/mens-new-arrivals,200,30,30,products_found,
+2026-10-20,Snitch,https://www.snitch.com/men-new-arrivals,200,25,24,products_found,
+2026-10-20,The Souled Store,https://www.thesouledstore.com/men/shirts,200,24,22,products_found,
+2026-10-20,Urban Monkey,https://www.urbanmonkey.com/collections/clothing,200,89,89,products_found,
