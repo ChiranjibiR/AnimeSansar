@@ -14,3 +14,7 @@ iso_week,brand,fit_labels_observed,note
 2026-W44,Snitch,cropped|oversized|regular fit|relaxed fit|slim fit|straight fit,Heuristic text detection; validate on product pages.
 2026-W44,The Souled Store,boxy fit|oversized|regular fit,Heuristic text detection; validate on product pages.
 2026-W44,Urban Monkey,boxy fit|cropped|loose fit|oversized|regular fit|relaxed fit|slim fit|wide leg,Heuristic text detection; validate on product pages.
+2026-W45,BearHouse,loose fit|oversized|regular fit|relaxed fit|slim fit|straight fit,Heuristic text detection; validate on product pages.
+2026-W45,BonkersCorner,loose fit|oversized|relaxed fit|wide leg,Heuristic text detection; validate on product pages.
+2026-W45,Snitch,cropped|oversized|regular fit|relaxed fit|slim fit|straight fit,Heuristic text detection; validate on product pages.
+2026-W45,Urban Monkey,boxy fit|cropped|loose fit|oversized|regular fit|relaxed fit|slim fit|wide leg,Heuristic text detection; validate on product pages.
